@@ -18,20 +18,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract smartctl from Ubuntu 25.04 package
+      - name: Build smartctl 7.5 from source (glibc 2.35 / Ubuntu 22.04 target)
+        # Build inside ubuntu:22.04 so the resulting binary links against
+        # glibc 2.35 — the lowest version we support.  A binary built against
+        # glibc 2.35 runs on Ubuntu 22.04, 24.04 and 25.04 without issues.
+        # Extracting from ubuntu:25.04 would produce a binary requiring glibc
+        # 2.38, which breaks on 22.04 installs.
         run: |
-          # Pull smartmontools out of the Ubuntu 25.04 image so we get the
-          # exact binary that shipped with that release without adding an
-          # apt repository to the host runner.
-          docker run --rm -v "$PWD/staging:/out" ubuntu:25.04 bash -c '
+          docker run --rm -v "$PWD/staging:/out" ubuntu:22.04 bash -c '
             set -e
+            export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
-            apt-get install -y --no-install-recommends smartmontools
-            SVER=$(/usr/sbin/smartctl --version | head -1 | grep -oP "\d+\.\d+")
-            echo "Installed smartmontools version: $SVER"
+            apt-get install -y --no-install-recommends \
+              build-essential curl ca-certificates libcap-ng-dev
+
+            curl -fsSL -o /tmp/smartmontools.tar.gz \
+              "https://downloads.sourceforge.net/project/smartmontools/smartmontools/7.5/smartmontools-7.5.tar.gz"
+
+            tar -xzf /tmp/smartmontools.tar.gz -C /tmp
+            cd /tmp/smartmontools-7.5
+
+            # Disable systemd journal integration to keep dependencies minimal
+            ./configure \
+              --prefix=/usr \
+              --without-systemdsystemunitdir \
+              --without-libsystemd \
+              CXXFLAGS="-O2"
+
+            make -j$(nproc) smartctl
+
             mkdir -p /out/smartctl
-            cp /usr/sbin/smartctl /out/smartctl/smartctl
+            cp smartctl /out/smartctl/smartctl
             chmod 755 /out/smartctl/smartctl
+            echo "Built: $(/out/smartctl/smartctl --version | head -1)"
           '
 
       - name: Verify binary
