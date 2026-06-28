@@ -1,0 +1,65 @@
+name: Prepare smartctl 7.5 (Linux x86_64)
+
+# Run manually by a maintainer when smartmontools needs to be updated.
+# Creates / updates the GitHub Release tag tools/smartctl-7.5 with a fresh
+# tar.gz containing just the smartctl binary extracted from the official
+# Ubuntu 25.04 (Plucky) amd64 package.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create releases and upload assets
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Extract smartctl from Ubuntu 25.04 package
+        run: |
+          # Pull smartmontools out of the Ubuntu 25.04 image so we get the
+          # exact binary that shipped with that release without adding an
+          # apt repository to the host runner.
+          docker run --rm -v "$PWD/staging:/out" ubuntu:25.04 bash -c '
+            set -e
+            apt-get update -qq
+            apt-get install -y --no-install-recommends smartmontools
+            SVER=$(/usr/sbin/smartctl --version | head -1 | grep -oP "\d+\.\d+")
+            echo "Installed smartmontools version: $SVER"
+            mkdir -p /out/smartctl
+            cp /usr/sbin/smartctl /out/smartctl/smartctl
+            chmod 755 /out/smartctl/smartctl
+          '
+
+      - name: Verify binary
+        run: |
+          file staging/smartctl/smartctl
+          staging/smartctl/smartctl --version || true   # exits non-zero without root, that is expected
+
+      - name: Package as tar.gz
+        run: |
+          tar -czf smartctl-7.5-linux-x86_64.tar.gz -C staging smartctl
+          sha256sum smartctl-7.5-linux-x86_64.tar.gz | tee smartctl-7.5-linux-x86_64.tar.gz.sha256
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Delete the tag/release if it already exists so we can re-run cleanly.
+          gh release delete tools/smartctl-7.5 --yes 2>/dev/null || true
+          git tag -d tools/smartctl-7.5 2>/dev/null || true
+
+          gh release create tools/smartctl-7.5 \
+            --title "smartctl 7.5 (Linux x86_64)" \
+            --notes "$(cat <<'EOF'
+          smartctl binary extracted from the official Ubuntu 25.04 (Plucky) amd64 package.
+
+          **Source:** ubuntu:25.04 Docker image — smartmontools package
+          **Arch:** x86_64 (amd64)
+          **Linked against:** glibc / libstdc++ (always present on Ubuntu)
+
+          SHA-256 of the tar.gz is in the accompanying .sha256 file.
+          EOF
+          )" \
+            smartctl-7.5-linux-x86_64.tar.gz \
+            smartctl-7.5-linux-x86_64.tar.gz.sha256
