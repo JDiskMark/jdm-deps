@@ -24,12 +24,19 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile smartmontools-setup.exe -UseBasicParsing
         shell: pwsh
 
+      - name: List installer contents (debug)
+        run: 7z l smartmontools-setup.exe | Select-String -Pattern "smartctl|\.exe" -CaseSensitive:$false
+        shell: pwsh
+
       - name: Extract smartctl.exe from installer
         # Use 7-Zip (pre-installed on GitHub-hosted Windows runners) to unpack
         # the NSIS installer without running it.
+        # Use 7z e (extract without paths) and filter by filename only —
+        # NSIS installers store files at the archive root regardless of
+        # the install destination path, so bin\ prefix must not be used.
         run: |
           New-Item -ItemType Directory -Force -Path staging\smartctl | Out-Null
-          7z e smartmontools-setup.exe bin\smartctl.exe -o"staging\smartctl" -y
+          7z e smartmontools-setup.exe smartctl.exe -o"staging\smartctl" -y
           if (-not (Test-Path "staging\smartctl\smartctl.exe")) {
             Write-Error "smartctl.exe was not found in the installer"
             exit 1
