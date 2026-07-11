@@ -1,0 +1,71 @@
+name: Prepare smartctl 7.5 (Windows x86_64)
+
+# Run manually by a maintainer when smartmontools needs to be updated.
+# Creates / updates the GitHub Release tag tools/smartctl-7.5-win64 with a
+# zip containing just smartctl.exe extracted from the official smartmontools
+# Windows 64-bit installer package from SourceForge.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create releases and upload assets
+
+jobs:
+  prepare:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download smartmontools 7.5 Windows installer
+        run: |
+          $url = "https://downloads.sourceforge.net/project/smartmontools/smartmontools/7.5/smartmontools-7.5-1.win32-setup.exe"
+          Invoke-WebRequest -Uri $url -OutFile smartmontools-setup.exe -UseBasicParsing
+        shell: pwsh
+
+      - name: Extract smartctl.exe from installer
+        # Use 7-Zip (pre-installed on GitHub-hosted Windows runners) to unpack
+        # the NSIS installer without running it.
+        run: |
+          New-Item -ItemType Directory -Force -Path staging\smartctl | Out-Null
+          7z e smartmontools-setup.exe bin\smartctl.exe -o"staging\smartctl" -y
+          if (-not (Test-Path "staging\smartctl\smartctl.exe")) {
+            Write-Error "smartctl.exe was not found in the installer"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Verify binary
+        run: |
+          $ver = & "staging\smartctl\smartctl.exe" --version 2>&1 | Select-Object -First 1
+          Write-Host "Extracted: $ver"
+        shell: pwsh
+
+      - name: Package as zip and compute SHA-256
+        run: |
+          Compress-Archive -Path staging\smartctl -DestinationPath smartctl-7.5-windows-x86_64.zip -Force
+          $hash = (Get-FileHash smartctl-7.5-windows-x86_64.zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  smartctl-7.5-windows-x86_64.zip" | Out-File -Encoding ascii smartctl-7.5-windows-x86_64.zip.sha256
+          Write-Host "SHA-256: $hash"
+        shell: pwsh
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Delete the tag/release if it already exists so we can re-run cleanly.
+          gh release delete tools/smartctl-7.5-win64 --yes 2>$null || true
+          git tag -d tools/smartctl-7.5-win64 2>$null || true
+
+          gh release create tools/smartctl-7.5-win64 `
+            --title "smartctl 7.5 (Windows x86_64)" `
+            --notes "smartctl.exe extracted from the official smartmontools 7.5 Windows 64-bit installer.
+
+          **Source:** smartmontools-7.5-1.win32-setup.exe (SourceForge)
+          **Arch:** x86_64 (64-bit Windows)
+
+          SHA-256 of the zip is in the accompanying .sha256 file." `
+            smartctl-7.5-windows-x86_64.zip `
+            smartctl-7.5-windows-x86_64.zip.sha256
+        shell: pwsh
