@@ -23,7 +23,7 @@ jobs:
         # Invoke-WebRequest can land on the HTML interstitial page instead.
         run: |
           curl -fsSL -o smartmontools-setup.exe `
-            "https://downloads.sourceforge.net/project/smartmontools/smartmontools/7.5/smartmontools-7.5-1.win32-setup.exe"
+            "https://downloads.sourceforge.net/project/smartmontools/smartmontools/7.5/smartmontools-7.5.win32-setup.exe"
           $size = (Get-Item smartmontools-setup.exe).Length
           Write-Host "Downloaded $size bytes"
           if ($size -lt 500000) {
