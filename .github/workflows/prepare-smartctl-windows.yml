@@ -40,18 +40,21 @@ jobs:
         shell: pwsh
 
       - name: Extract smartctl.exe from installer
-        # Use 7-Zip (pre-installed on GitHub-hosted Windows runners) to unpack
-        # the NSIS installer without running it.
-        # Use 7z e (extract without paths) and filter by filename only —
-        # NSIS installers store files at the archive root regardless of
-        # the install destination path, so bin\ prefix must not be used.
+        # The NSIS installer uses a solid LZMA archive — 7-Zip cannot filter
+        # by filename on solid archives ("No files to process" if you try).
+        # Extract everything first with 7z x, then pick out smartctl.exe.
         run: |
+          New-Item -ItemType Directory -Force -Path staging\all    | Out-Null
           New-Item -ItemType Directory -Force -Path staging\smartctl | Out-Null
-          7z e -tNSIS smartmontools-setup.exe smartctl.exe -o"staging\smartctl" -y
-          if (-not (Test-Path "staging\smartctl\smartctl.exe")) {
-            Write-Error "smartctl.exe was not found in the installer"
+          7z x -tNSIS smartmontools-setup.exe -o"staging\all" -y
+          $exe = Get-ChildItem -Recurse -Filter "smartctl.exe" -Path "staging\all" |
+                   Select-Object -First 1
+          if (-not $exe) {
+            Write-Error "smartctl.exe was not found in the extracted installer contents"
             exit 1
           }
+          Write-Host "Found: $($exe.FullName)"
+          Copy-Item $exe.FullName "staging\smartctl\smartctl.exe"
         shell: pwsh
 
       - name: Verify binary
