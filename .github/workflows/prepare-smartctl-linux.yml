@@ -6,6 +6,9 @@ name: Prepare smartctl 7.5 (Linux x86_64)
 # Ubuntu 25.04 (Plucky) amd64 package.
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/prepare-smartctl-linux.yml'
 
 permissions:
   contents: write   # needed to create releases and upload assets
@@ -64,6 +67,7 @@ jobs:
           sha256sum smartctl-7.5-linux-x86_64.tar.gz | tee smartctl-7.5-linux-x86_64.tar.gz.sha256
 
       - name: Publish GitHub Release
+        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

@@ -6,6 +6,9 @@ name: Prepare smartctl 7.5 (Windows x86_64)
 # Windows 64-bit installer package from SourceForge.
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/prepare-smartctl-windows.yml'
 
 permissions:
   contents: write   # needed to create releases and upload assets
@@ -72,6 +75,7 @@ jobs:
         shell: pwsh
 
       - name: Publish GitHub Release
+        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
