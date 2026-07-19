@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download smartmontools 7.5 Windows installer
         # curl -L follows SourceForge's multi-hop redirect reliably;
